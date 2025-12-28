@@ -3,7 +3,7 @@ package me.wikmor.lpc;
 import me.clip.placeholderapi.PlaceholderAPI;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.cacheddata.CachedMetaData;
-import org.bukkit.ChatColor;
+import net.luckperms.api.model.user.User;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -12,17 +12,18 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.jspecify.annotations.NonNull;
+
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
+import java.util.Objects;
+import java.util.UUID;
 
 public final class LPC extends JavaPlugin implements Listener {
-
-	private static final Pattern HEX_PATTERN = Pattern.compile("&#([A-Fa-f0-9]{6})");
 
 	private LuckPerms luckPerms;
 	
@@ -36,11 +37,11 @@ public final class LPC extends JavaPlugin implements Listener {
 	}
 
 	@Override
-	public boolean onCommand(final CommandSender sender, final Command command, final String label, final String[] args) {
+	public boolean onCommand(final @NonNull CommandSender sender, final @NonNull Command command, final @NonNull String label, final String[] args) {
 		if (args.length == 1 && "reload".equals(args[0])) {
 			reloadConfig();
 
-			sender.sendMessage(colorize("&aLPC has been reloaded."));
+			sender.sendMessage(colorizeToSection("&aLPC has been reloaded."));
 			return true;
 		}
 
@@ -48,59 +49,102 @@ public final class LPC extends JavaPlugin implements Listener {
 	}
 
 	@Override
-	public List<String> onTabComplete(final CommandSender sender, final Command command, final String alias, final String[] args) {
+	public List<String> onTabComplete(final @NonNull CommandSender sender, final @NonNull Command command, final @NonNull String alias, final String[] args) {
 		if (args.length == 1)
 			return Collections.singletonList("reload");
 
 		return new ArrayList<>();
 	}
 
+	/**
+	 * AsyncPlayerChatEvent is deprecated in newer APIs in favor of the component-based AsyncChatEvent.
+	 * Migrating to AsyncChatEvent requires component-based formatting; keep this handler for
+	 * compatibility and suppress the deprecation warning to avoid IDE noise.
+	 */
+	@SuppressWarnings("deprecation")
 	@EventHandler(priority = EventPriority.HIGHEST)
 	public void onChat(final AsyncPlayerChatEvent event) {
 		final String message = event.getMessage();
 		final Player player = event.getPlayer();
 
-		// Get a LuckPerms cached metadata for the player.
-		final CachedMetaData metaData = this.luckPerms.getPlayerAdapter(Player.class).getMetaData(player);
-		final String group = metaData.getPrimaryGroup();
+		// Try to get a LuckPerms User via the UserManager (preferred over the deprecated PlayerAdapter).
+		CachedMetaData metaData;
+		String group;
+		String prefix = "";
+		String suffix = "";
+		String prefixesJoined = "";
+		String suffixesJoined = "";
+		String usernameColor = "";
+		String messageColor = "";
 
-		String format = getConfig().getString(getConfig().getString("group-formats." + group) != null ? "group-formats." + group : "chat-format")
-				.replace("{prefix}", metaData.getPrefix() != null ? metaData.getPrefix() : "")
-				.replace("{suffix}", metaData.getSuffix() != null ? metaData.getSuffix() : "")
-				.replace("{prefixes}", metaData.getPrefixes().keySet().stream().map(key -> metaData.getPrefixes().get(key)).collect(Collectors.joining()))
-				.replace("{suffixes}", metaData.getSuffixes().keySet().stream().map(key -> metaData.getSuffixes().get(key)).collect(Collectors.joining()))
-				.replace("{world}", player.getWorld().getName())
-				.replace("{name}", player.getName())
-				.replace("{displayname}", player.getDisplayName())
-				.replace("{username-color}", metaData.getMetaValue("username-color") != null ? metaData.getMetaValue("username-color") : "")
-				.replace("{message-color}", metaData.getMetaValue("message-color") != null ? metaData.getMetaValue("message-color") : "");
+		try {
+			final UUID uuid = player.getUniqueId();
+			final User user = this.luckPerms != null ? this.luckPerms.getUserManager().getUser(uuid) : null;
 
-		format = colorize(translateHexColorCodes(getServer().getPluginManager().isPluginEnabled("PlaceholderAPI") ? PlaceholderAPI.setPlaceholders(player, format) : format));
-
-		event.setFormat(format.replace("{message}", player.hasPermission("lpc.colorcodes") && player.hasPermission("lpc.rgbcodes")
-				? colorize(translateHexColorCodes(message)) : player.hasPermission("lpc.colorcodes") ? colorize(message) : player.hasPermission("lpc.rgbcodes")
-				? translateHexColorCodes(message) : message).replace("%", "%%"));
-	}
-
-	private String colorize(final String message) {
-		return ChatColor.translateAlternateColorCodes('&', message);
-	}
-
-	private String translateHexColorCodes(final String message) {
-		final char colorChar = ChatColor.COLOR_CHAR;
-
-		final Matcher matcher = HEX_PATTERN.matcher(message);
-		final StringBuffer buffer = new StringBuffer(message.length() + 4 * 8);
-
-		while (matcher.find()) {
-			final String group = matcher.group(1);
-
-			matcher.appendReplacement(buffer, colorChar + "x"
-					+ colorChar + group.charAt(0) + colorChar + group.charAt(1)
-					+ colorChar + group.charAt(2) + colorChar + group.charAt(3)
-					+ colorChar + group.charAt(4) + colorChar + group.charAt(5));
+			if (user != null) {
+				metaData = user.getCachedData().getMetaData();
+				group = metaData.getPrimaryGroup();
+				prefix = metaData.getPrefix() != null ? metaData.getPrefix() : "";
+				suffix = metaData.getSuffix() != null ? metaData.getSuffix() : "";
+				try { prefixesJoined = String.join("", metaData.getPrefixes().values()); } catch (Exception ignored) {}
+				try { suffixesJoined = String.join("", metaData.getSuffixes().values()); } catch (Exception ignored) {}
+				usernameColor = metaData.getMetaValue("username-color") != null ? Objects.requireNonNull(metaData.getMetaValue("username-color")) : "";
+				messageColor = metaData.getMetaValue("message-color") != null ? Objects.requireNonNull(metaData.getMetaValue("message-color")) : "";
+			} else {
+				group = "";
+			}
+		} catch (Exception ex) {
+			group = "";
 		}
 
-		return matcher.appendTail(buffer).toString();
+		// build displayname string from Component API (avoid deprecated getDisplayName)
+		final LegacyComponentSerializer ampSerializer = LegacyComponentSerializer.builder().character('&').hexColors().build();
+		final String displayNameString = ampSerializer.serialize(player.displayName());
+
+		String format = Objects.requireNonNull(getConfig().getString(getConfig().getString("group-formats." + group) != null ? "group-formats." + group : "chat-format"))
+				.replace("{prefix}", prefix)
+				.replace("{suffix}", suffix)
+				.replace("{prefixes}", prefixesJoined)
+				.replace("{suffixes}", suffixesJoined)
+				.replace("{world}", player.getWorld().getName())
+				.replace("{name}", player.getName())
+				.replace("{displayname}", displayNameString)
+				.replace("{username-color}", usernameColor)
+				.replace("{message-color}", messageColor);
+
+		format = ampSerializer.serialize(ampSerializer.deserialize(getServer().getPluginManager().isPluginEnabled("PlaceholderAPI") ? PlaceholderAPI.setPlaceholders(player, format) : format));
+
+		String processedMessage;
+		final boolean allowColor = player.hasPermission("lpc.colorcodes");
+		final boolean allowRgb = player.hasPermission("lpc.rgbcodes");
+
+		// Simplified logic: handle the four permission combinations explicitly.
+		if (allowColor && allowRgb) {
+			// keep both & color codes and hex sequences
+			processedMessage = message;
+		} else if (allowColor) {
+			// keep & color codes, strip hex (&#rrggbb)
+			processedMessage = message.replaceAll("&#[A-Fa-f0-9]{6}", "");
+		} else if (allowRgb) {
+			// strip & codes, keep hex sequences
+			processedMessage = message.replaceAll("(?i)&[0-9A-FK-OR]", "");
+		} else {
+			// strip both
+			processedMessage = message.replaceAll("(?i)&[0-9A-FK-OR]", "");
+			processedMessage = processedMessage.replaceAll("&#[A-Fa-f0-9]{6}", "");
+		}
+
+		final String finalFormat = format.replace("{message}", processedMessage).replace("%", "%%");
+
+		// convert legacy '&' + hex string to section-prefixed string and set format
+		event.setFormat(colorizeToSection(finalFormat));
+	}
+
+	private String colorizeToSection(final String message) {
+		if (message == null) return "";
+		final LegacyComponentSerializer fromAmp = LegacyComponentSerializer.builder().character('&').hexColors().build();
+		final LegacyComponentSerializer toSection = LegacyComponentSerializer.builder().character('§').hexColors().build();
+		final Component comp = fromAmp.deserialize(message);
+		return toSection.serialize(comp);
 	}
 }
