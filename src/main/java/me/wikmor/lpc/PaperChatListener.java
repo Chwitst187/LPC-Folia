@@ -19,13 +19,13 @@ public final class PaperChatListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onChat(final AsyncChatEvent event) {
         final Player player = event.getPlayer();
+        final LegacyComponentSerializer ampSerializer = LegacyComponentSerializer.builder().character('&').hexColors().build();
 
         String format = plugin.buildFormat(player);
-        String processedMessage = plugin.processMessage(player,
-                LegacyComponentSerializer.legacySection().serialize(event.message()));
+        String processedMessage = plugin.processMessage(player, ampSerializer.serialize(event.message()));
 
         String finalFormat = format.replace("{message}", processedMessage);
-        Component rendered = LegacyComponentSerializer.legacySection().deserialize(finalFormat);
+        Component rendered = ampSerializer.deserialize(finalFormat);
 
         event.renderer((source, sourceDisplayName, msg, audience) -> rendered);
     }

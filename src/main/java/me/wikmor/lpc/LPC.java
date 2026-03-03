@@ -18,6 +18,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -125,8 +126,16 @@ public final class LPC extends JavaPlugin implements Listener {
 	@SuppressWarnings("deprecation")
 	@EventHandler(priority = EventPriority.HIGHEST)
 	public void onChat(final AsyncPlayerChatEvent event) {
-		final String message = event.getMessage();
 		final Player player = event.getPlayer();
+		final String format = buildFormat(player);
+		final String processedMessage = processMessage(player, event.getMessage());
+		final String finalFormat = format.replace("{message}", processedMessage).replace("%", "%%");
+
+		// convert legacy '&' + hex string to section-prefixed string and set format
+		event.setFormat(colorizeToSection(finalFormat));
+	}
+
+	String buildFormat(final Player player) {
 
 		// Try to get a LuckPerms User via the UserManager (preferred over the deprecated PlayerAdapter).
 		CachedMetaData metaData;
@@ -174,7 +183,10 @@ public final class LPC extends JavaPlugin implements Listener {
 				.replace("{message-color}", messageColor);
 
 		format = ampSerializer.serialize(ampSerializer.deserialize(getServer().getPluginManager().isPluginEnabled("PlaceholderAPI") ? PlaceholderAPI.setPlaceholders(player, format) : format));
+		return format;
+	}
 
+	String processMessage(final Player player, final String message) {
 		String processedMessage;
 		final boolean allowColor = player.hasPermission("lpc.colorcodes");
 		final boolean allowRgb = player.hasPermission("lpc.rgbcodes");
@@ -195,10 +207,11 @@ public final class LPC extends JavaPlugin implements Listener {
 			processedMessage = processedMessage.replaceAll("&#[A-Fa-f0-9]{6}", "");
 		}
 
-		final String finalFormat = format.replace("{message}", processedMessage).replace("%", "%%");
+		return processedMessage;
+	}
 
-		// convert legacy '&' + hex string to section-prefixed string and set format
-		event.setFormat(colorizeToSection(finalFormat));
+	private String colorize(final String message) {
+		return colorizeToSection(message);
 	}
 
 	private String colorizeToSection(final String message) {
