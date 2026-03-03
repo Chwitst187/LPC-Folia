@@ -14,6 +14,7 @@
 # {message-color} - the player's or the group's message color
 #
 # Color codes: Use & for colors (&a, &b, etc.) and &#rrggbb for hex colors.
+# MiniMessage tags (e.g. <red>, <gradient:#ff0000:#00ff00>) are also supported in chat formats.
 # Permissions: lpc.reload, lpc.clearchat, lpc.debug, lpc.colorcodes, lpc.rgbcodes
 #
 # Commands:
