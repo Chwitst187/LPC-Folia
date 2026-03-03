@@ -2,7 +2,7 @@ package me.wikmor.lpc;
 
 import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -19,13 +19,13 @@ public final class PaperChatListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onChat(final AsyncChatEvent event) {
         final Player player = event.getPlayer();
-        final LegacyComponentSerializer ampSerializer = LegacyComponentSerializer.builder().character('&').hexColors().build();
 
         String format = plugin.buildFormat(player);
-        String processedMessage = plugin.processMessage(player, ampSerializer.serialize(event.message()));
+        String processedMessage = plugin.processMessage(player, PlainTextComponentSerializer.plainText().serialize(event.message()));
 
-        String finalFormat = format.replace("{message}", processedMessage);
-        Component rendered = ampSerializer.deserialize(finalFormat);
+        String escapedMessage = plugin.escapeMiniMessageTags(processedMessage);
+        String finalFormat = format.replace("{message}", escapedMessage);
+        Component rendered = plugin.deserializeChatComponent(finalFormat);
 
         event.renderer((source, sourceDisplayName, msg, audience) -> rendered);
     }

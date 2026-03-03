@@ -15,6 +15,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.jspecify.annotations.NonNull;
 
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 
 import java.util.ArrayList;
@@ -24,6 +25,9 @@ import java.util.Objects;
 import java.util.UUID;
 
 public final class LPC extends JavaPlugin implements Listener {
+	private static final LegacyComponentSerializer AMP_SERIALIZER = LegacyComponentSerializer.builder().character('&').hexColors().build();
+	private static final LegacyComponentSerializer SECTION_SERIALIZER = LegacyComponentSerializer.builder().character('§').hexColors().build();
+	private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
 
 	private LuckPerms luckPerms;
 
@@ -129,7 +133,8 @@ public final class LPC extends JavaPlugin implements Listener {
 		final Player player = event.getPlayer();
 		final String format = buildFormat(player);
 		final String processedMessage = processMessage(player, event.getMessage());
-		final String finalFormat = format.replace("{message}", processedMessage).replace("%", "%%");
+		final String escapedMessage = escapeMiniMessageTags(processedMessage);
+		final String finalFormat = format.replace("{message}", escapedMessage).replace("%", "%%");
 
 		// convert legacy '&' + hex string to section-prefixed string and set format
 		event.setFormat(colorizeToSection(finalFormat));
@@ -168,8 +173,7 @@ public final class LPC extends JavaPlugin implements Listener {
 		}
 
 		// build displayname string from Component API (avoid deprecated getDisplayName)
-		final LegacyComponentSerializer ampSerializer = LegacyComponentSerializer.builder().character('&').hexColors().build();
-		final String displayNameString = ampSerializer.serialize(player.displayName());
+		final String displayNameString = AMP_SERIALIZER.serialize(player.displayName());
 
 		String format = Objects.requireNonNull(getConfig().getString(getConfig().getString("group-formats." + group) != null ? "group-formats." + group : "chat-format"))
 				.replace("{prefix}", prefix)
@@ -182,7 +186,7 @@ public final class LPC extends JavaPlugin implements Listener {
 				.replace("{username-color}", usernameColor)
 				.replace("{message-color}", messageColor);
 
-		format = ampSerializer.serialize(ampSerializer.deserialize(getServer().getPluginManager().isPluginEnabled("PlaceholderAPI") ? PlaceholderAPI.setPlaceholders(player, format) : format));
+		format = getServer().getPluginManager().isPluginEnabled("PlaceholderAPI") ? PlaceholderAPI.setPlaceholders(player, format) : format;
 		return format;
 	}
 
@@ -216,10 +220,30 @@ public final class LPC extends JavaPlugin implements Listener {
 
 	private String colorizeToSection(final String message) {
 		if (message == null) return "";
-		final LegacyComponentSerializer fromAmp = LegacyComponentSerializer.builder().character('&').hexColors().build();
-		final LegacyComponentSerializer toSection = LegacyComponentSerializer.builder().character('§').hexColors().build();
-		final Component comp = fromAmp.deserialize(message);
-		return toSection.serialize(comp);
+		return SECTION_SERIALIZER.serialize(deserializeChatComponent(message));
+	}
+
+	Component deserializeChatComponent(final String message) {
+		if (message == null || message.isEmpty()) {
+			return Component.empty();
+		}
+		if (containsMiniMessage(message)) {
+			try {
+				return MINI_MESSAGE.deserialize(message);
+			} catch (RuntimeException ignored) {
+				return AMP_SERIALIZER.deserialize(message);
+			}
+		}
+		return AMP_SERIALIZER.deserialize(message);
+	}
+
+
+	String escapeMiniMessageTags(final String message) {
+		return MINI_MESSAGE.escapeTags(message);
+	}
+
+	private boolean containsMiniMessage(final String message) {
+		return message.contains("<") && message.contains(">");
 	}
 
 	String stripColorCodes(final String message) {
