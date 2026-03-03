@@ -6,11 +6,11 @@
 	<artifactId>lpc</artifactId>
 	<name>LPC</name>
 	<description>A chat formatting plugin for LuckPerms.</description>
-	<version>3.6.2</version>
+	<version>3.7.0</version>
 	<packaging>jar</packaging>
 	
 	<properties>
-		<author>wikmor</author>
+		<author>PM2</author>
 		<main.class>me.wikmor.lpc.LPC</main.class>
 		<java.version>1.8</java.version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

@@ -18,7 +18,6 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -26,14 +25,39 @@ import java.util.UUID;
 public final class LPC extends JavaPlugin implements Listener {
 
 	private LuckPerms luckPerms;
-	
+
+
 	@Override
 	public void onEnable() {
 		// Load an instance of 'LuckPerms' using the services manager.
 		this.luckPerms = getServer().getServicesManager().load(LuckPerms.class);
+		if (this.luckPerms == null) {
+			getLogger().severe("LuckPerms not found! LPC requires LuckPerms to function.");
+			getServer().getPluginManager().disablePlugin(this);
+			return;
+		}
 
 		saveDefaultConfig();
-		getServer().getPluginManager().registerEvents(this, this);
+
+		boolean paperChat = false;
+		try {
+			Class.forName("io.papermc.paper.event.player.AsyncChatEvent");
+			paperChat = true;
+		} catch (ClassNotFoundException ignored) {
+		}
+
+		if (paperChat) {
+			getServer().getPluginManager().registerEvents(new PaperChatListener(this), this);
+		} else {
+			getServer().getPluginManager().registerEvents(this, this);
+		}
+
+		final String[] chatPlugins = {"EssentialsChat", "VentureChat", "HeroChat", "DeluxeChat", "ChatManager", "ChatEx", "UltraChat", "TownyChat"};
+		for (final String pluginName : chatPlugins) {
+			if (getServer().getPluginManager().isPluginEnabled(pluginName)) {
+				getLogger().warning("Detected " + pluginName + " which may also format chat. To avoid message duplication, disable chat formatting in " + pluginName + ".");
+			}
+		}
 	}
 
 	@Override
@@ -42,6 +66,43 @@ public final class LPC extends JavaPlugin implements Listener {
 			reloadConfig();
 
 			sender.sendMessage(colorizeToSection("&aLPC has been reloaded."));
+			return true;
+		}
+
+		if (args.length == 1 && "clear".equals(args[0]) && sender.hasPermission("lpc.clearchat")) {
+			for (final Player player : getServer().getOnlinePlayers()) {
+				for (int i = 0; i < 100; i++) {
+					player.sendMessage("");
+				}
+			}
+			final String clearMessage = getConfig().getString("clear-chat-message", "&7Chat has been cleared by a staff member.");
+			getServer().broadcastMessage(colorize(clearMessage));
+			return true;
+		}
+
+		if (args.length == 2 && "debug".equals(args[0]) && sender.hasPermission("lpc.debug")) {
+			final Player target = getServer().getPlayer(args[1]);
+			if (target == null) {
+				sender.sendMessage(colorize("&cPlayer not found."));
+				return true;
+			}
+			final CachedMetaData debugMeta = luckPerms.getPlayerAdapter(Player.class).getMetaData(target);
+			sender.sendMessage(colorize("&6&lLPC Debug: &f" + target.getName()));
+			sender.sendMessage(colorize("&7Primary Group: &f" + debugMeta.getPrimaryGroup()));
+			sender.sendMessage(colorize("&7Prefix: &f" + (debugMeta.getPrefix() != null ? debugMeta.getPrefix() : "&cnone")));
+			sender.sendMessage(colorize("&7Suffix: &f" + (debugMeta.getSuffix() != null ? debugMeta.getSuffix() : "&cnone")));
+			sender.sendMessage(colorize("&7All Prefixes (by weight):"));
+			debugMeta.getPrefixes().forEach((weight, prefix) ->
+					sender.sendMessage(colorize("  &7[" + weight + "] &f" + prefix)));
+			sender.sendMessage(colorize("&7All Suffixes (by weight):"));
+			debugMeta.getSuffixes().forEach((weight, suffix) ->
+					sender.sendMessage(colorize("  &7[" + weight + "] &f" + suffix)));
+			sender.sendMessage(colorize("&7Username-color: &f" + (debugMeta.getMetaValue("username-color") != null ? debugMeta.getMetaValue("username-color") : "&cnone")));
+			sender.sendMessage(colorize("&7Message-color: &f" + (debugMeta.getMetaValue("message-color") != null ? debugMeta.getMetaValue("message-color") : "&cnone")));
+			sender.sendMessage(colorize("&7Group format: &f" + (getConfig().getString("group-formats." + debugMeta.getPrimaryGroup()) != null ? "group-formats." + debugMeta.getPrimaryGroup() : "chat-format (default)")));
+			sender.sendMessage(colorize("&7PAPI: &f" + (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI") ? "&ahooked" : "&cnot found")));
+			sender.sendMessage(colorize("&7Has lpc.colorcodes: &f" + target.hasPermission("lpc.colorcodes")));
+			sender.sendMessage(colorize("&7Has lpc.rgbcodes: &f" + target.hasPermission("lpc.rgbcodes")));
 			return true;
 		}
 
@@ -146,5 +207,15 @@ public final class LPC extends JavaPlugin implements Listener {
 		final LegacyComponentSerializer toSection = LegacyComponentSerializer.builder().character('§').hexColors().build();
 		final Component comp = fromAmp.deserialize(message);
 		return toSection.serialize(comp);
+	}
+
+	String stripColorCodes(final String message) {
+		return message.replaceAll("&[0-9a-fA-Fk-oK-OrR]", "");
+	}
+
+	String stripHexCodes(final String message) {
+		String result = message.replaceAll("&#[0-9a-fA-F]{6}", "");
+		result = result.replaceAll("&x(&[0-9a-fA-F]){6}", "");
+		return result;
 	}
 }
