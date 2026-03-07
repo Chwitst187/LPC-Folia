@@ -195,20 +195,16 @@ public final class LPC extends JavaPlugin implements Listener {
 		final boolean allowColor = player.hasPermission("lpc.colorcodes");
 		final boolean allowRgb = player.hasPermission("lpc.rgbcodes");
 
-		// Simplified logic: handle the four permission combinations explicitly.
-		if (allowColor && allowRgb) {
-			// keep both & color codes and hex sequences
-			processedMessage = message;
-		} else if (allowColor) {
-			// keep & color codes, strip hex (&#rrggbb)
-			processedMessage = message.replaceAll("&#[A-Fa-f0-9]{6}", "");
-		} else if (allowRgb) {
-			// strip & codes, keep hex sequences
-			processedMessage = message.replaceAll("(?i)&[0-9A-FK-OR]", "");
-		} else {
-			// strip both
+		// If player doesn't have lpc.colorcodes permission, strip all color codes from their message
+		if (!allowColor) {
 			processedMessage = message.replaceAll("(?i)&[0-9A-FK-OR]", "");
 			processedMessage = processedMessage.replaceAll("&#[A-Fa-f0-9]{6}", "");
+		} else if (!allowRgb) {
+			// Player has colorcodes but not rgbcodes, so strip only hex codes
+			processedMessage = message.replaceAll("&#[A-Fa-f0-9]{6}", "");
+		} else {
+			// Player has both permissions, keep everything
+			processedMessage = message;
 		}
 
 		return processedMessage;
