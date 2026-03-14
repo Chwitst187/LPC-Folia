@@ -96,8 +96,10 @@ public final class LPC extends JavaPlugin implements Listener {
 			sender.sendMessage(colorize("&7All Suffixes (by weight):"));
 			debugMeta.getSuffixes().forEach((weight, suffix) ->
 					sender.sendMessage(colorize("  &7[" + weight + "] &f" + suffix)));
-			sender.sendMessage(colorize("&7Username-color: &f" + (debugMeta.getMetaValue("username-color") != null ? debugMeta.getMetaValue("username-color") : "&cnone")));
-			sender.sendMessage(colorize("&7Message-color: &f" + (debugMeta.getMetaValue("message-color") != null ? debugMeta.getMetaValue("message-color") : "&cnone")));
+			final String usernameColor = debugMeta.getMetaValue("username-color");
+			final String messageColor = debugMeta.getMetaValue("message-color");
+			sender.sendMessage(colorize("&7Username-color: &f" + (usernameColor != null ? usernameColor : "&cnone")));
+			sender.sendMessage(colorize("&7Message-color: &f" + (messageColor != null ? messageColor : "&cnone")));
 			sender.sendMessage(colorize("&7Group format: &f" + (getConfig().getString("group-formats." + debugMeta.getPrimaryGroup()) != null ? "group-formats." + debugMeta.getPrimaryGroup() : "chat-format (default)")));
 			sender.sendMessage(colorize("&7PAPI: &f" + (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI") ? "&ahooked" : "&cnot found")));
 			sender.sendMessage(colorize("&7Has lpc.colorcodes: &f" + target.hasPermission("lpc.colorcodes")));
@@ -111,10 +113,11 @@ public final class LPC extends JavaPlugin implements Listener {
 	@Override
 	public List<String> onTabComplete(final CommandSender sender, final Command command, final String alias, final String[] args) {
 		if (args.length == 1) {
+			final String input = args[0].toLowerCase();
 			final List<String> completions = new ArrayList<>();
-			if (sender.hasPermission("lpc.reload")) completions.add("reload");
-			if (sender.hasPermission("lpc.clearchat")) completions.add("clear");
-			if (sender.hasPermission("lpc.debug")) completions.add("debug");
+			if (sender.hasPermission("lpc.reload") && "reload".startsWith(input)) completions.add("reload");
+			if (sender.hasPermission("lpc.clearchat") && "clear".startsWith(input)) completions.add("clear");
+			if (sender.hasPermission("lpc.debug") && "debug".startsWith(input)) completions.add("debug");
 			return completions;
 		}
 		if (args.length == 2 && "debug".equals(args[0]) && sender.hasPermission("lpc.debug")) {
@@ -146,16 +149,21 @@ public final class LPC extends JavaPlugin implements Listener {
 			format = "{prefix}{name}&r: {message}";
 		}
 
+		final String prefix = metaData.getPrefix();
+		final String suffix = metaData.getSuffix();
+		final String usernameColor = metaData.getMetaValue("username-color");
+		final String messageColor = metaData.getMetaValue("message-color");
+
 		format = format
-				.replace("{prefix}", metaData.getPrefix() != null ? metaData.getPrefix() : "")
-				.replace("{suffix}", metaData.getSuffix() != null ? metaData.getSuffix() : "")
+				.replace("{prefix}", prefix != null ? prefix : "")
+				.replace("{suffix}", suffix != null ? suffix : "")
 				.replace("{prefixes}", metaData.getPrefixes().keySet().stream().map(key -> metaData.getPrefixes().get(key)).collect(Collectors.joining()))
 				.replace("{suffixes}", metaData.getSuffixes().keySet().stream().map(key -> metaData.getSuffixes().get(key)).collect(Collectors.joining()))
 				.replace("{world}", player.getWorld().getName())
 				.replace("{name}", player.getName())
 				.replace("{displayname}", player.getDisplayName())
-				.replace("{username-color}", metaData.getMetaValue("username-color") != null ? metaData.getMetaValue("username-color") : "")
-				.replace("{message-color}", metaData.getMetaValue("message-color") != null ? metaData.getMetaValue("message-color") : "");
+				.replace("{username-color}", usernameColor != null ? usernameColor : "")
+				.replace("{message-color}", messageColor != null ? messageColor : "");
 
 		format = translateHexColorCodes(format);
 		if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
