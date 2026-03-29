@@ -203,6 +203,7 @@ public final class LPC extends JavaPlugin implements Listener {
 		} else if (!allowRgb) {
 			message = stripHexCodes(message);
 		}
+		message = stripMiniMessageTags(message);
 
 		final Component component = allowColor ? AMP_SERIALIZER.deserialize(message) : Component.text(message);
 
@@ -262,6 +263,11 @@ public final class LPC extends JavaPlugin implements Listener {
 	private Component stripInteractiveEvents(final Component component) {
 		return component.children(component.children().stream().map(this::stripInteractiveEvents).collect(Collectors.toList()))
 				.style(component.style().clickEvent(null).hoverEvent(null).insertion(null));
+	}
+
+	private String stripMiniMessageTags(final String input) {
+		if (input == null || input.isEmpty()) return "";
+		return input.replaceAll("<[^>]+>", "");
 	}
 
 
