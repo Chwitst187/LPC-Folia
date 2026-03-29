@@ -20,12 +20,10 @@ public final class PaperChatListener implements Listener {
     public void onChat(final AsyncChatEvent event) {
         final Player player = event.getPlayer();
 
-        String format = plugin.buildFormat(player);
-        String processedMessage = plugin.processMessage(player, PlainTextComponentSerializer.plainText().serialize(event.message()));
-
-        String escapedMessage = plugin.escapeMiniMessageTags(processedMessage);
-        String finalFormat = format.replace("{message}", escapedMessage);
-        Component rendered = plugin.deserializeChatComponent(finalFormat);
+        final String format = plugin.buildFormatString(player);
+        final String rawMessage = PlainTextComponentSerializer.plainText().serialize(event.message());
+        final Component messageComponent = plugin.renderMessageComponent(player, rawMessage);
+        final Component rendered = plugin.renderFormatComponent(format, messageComponent);
 
         event.renderer((source, sourceDisplayName, msg, audience) -> rendered);
     }

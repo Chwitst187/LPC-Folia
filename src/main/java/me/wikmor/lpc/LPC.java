@@ -16,6 +16,9 @@ import org.jspecify.annotations.NonNull;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
+import net.kyori.adventure.text.minimessage.tag.standard.StandardTags;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 
 import java.util.ArrayList;
@@ -23,6 +26,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public final class LPC extends JavaPlugin implements Listener {
 	private static final LegacyComponentSerializer AMP_SERIALIZER = LegacyComponentSerializer.builder().character('&').hexColors().build();
@@ -81,7 +86,9 @@ public final class LPC extends JavaPlugin implements Listener {
 				}
 			}
 			final String clearMessage = getConfig().getString("clear-chat-message", "&7Chat has been cleared by a staff member.");
-			getServer().broadcastMessage(colorize(clearMessage));
+			final String formatted = colorize(clearMessage);
+			getServer().getOnlinePlayers().forEach(p -> p.sendMessage(formatted));
+			getServer().getConsoleSender().sendMessage(formatted);
 			return true;
 		}
 
@@ -131,16 +138,14 @@ public final class LPC extends JavaPlugin implements Listener {
 	@EventHandler(priority = EventPriority.HIGHEST)
 	public void onChat(final AsyncPlayerChatEvent event) {
 		final Player player = event.getPlayer();
-		final String format = buildFormat(player);
-		final String processedMessage = processMessage(player, event.getMessage());
-		final String escapedMessage = escapeMiniMessageTags(processedMessage);
-		final String finalFormat = format.replace("{message}", escapedMessage).replace("%", "%%");
-
-		// convert legacy '&' + hex string to section-prefixed string and set format
-		event.setFormat(colorizeToSection(finalFormat));
+		final String formatString = buildFormatString(player);
+		final Component messageComponent = renderMessageComponent(player, event.getMessage());
+		final Component rendered = renderFormatComponent(formatString, messageComponent);
+		final String legacyRendered = SECTION_SERIALIZER.serialize(rendered).replace("%", "%%");
+		event.setFormat(legacyRendered);
 	}
 
-	String buildFormat(final Player player) {
+	String buildFormatString(final Player player) {
 
 		// Try to get a LuckPerms User via the UserManager (preferred over the deprecated PlayerAdapter).
 		CachedMetaData metaData;
@@ -190,24 +195,66 @@ public final class LPC extends JavaPlugin implements Listener {
 		return format;
 	}
 
-	String processMessage(final Player player, final String message) {
-		String processedMessage;
+	Component renderMessageComponent(final Player player, final String rawMessage) {
 		final boolean allowColor = player.hasPermission("lpc.colorcodes");
 		final boolean allowRgb = player.hasPermission("lpc.rgbcodes");
 
-		// If player doesn't have lpc.colorcodes permission, strip all color codes from their message
+		String message = rawMessage == null ? "" : rawMessage;
 		if (!allowColor) {
-			processedMessage = message.replaceAll("(?i)&[0-9A-FK-OR]", "");
-			processedMessage = processedMessage.replaceAll("&#[A-Fa-f0-9]{6}", "");
+			message = stripColorCodes(stripHexCodes(message));
+			message = escapeMiniMessageTags(message);
 		} else if (!allowRgb) {
-			// Player has colorcodes but not rgbcodes, so strip only hex codes
-			processedMessage = message.replaceAll("&#[A-Fa-f0-9]{6}", "");
-		} else {
-			// Player has both permissions, keep everything
-			processedMessage = message;
+			message = stripHexCodes(message);
 		}
 
-		return processedMessage;
+		Component component;
+		if (containsMiniMessage(message)) {
+			final TagResolver.Builder tags = TagResolver.builder();
+			if (allowColor) {
+				tags.resolver(StandardTags.color());
+				tags.resolver(StandardTags.decorations());
+				if (allowRgb) {
+					tags.resolver(StandardTags.gradient());
+					tags.resolver(StandardTags.rainbow());
+				}
+			}
+
+			try {
+				component = MiniMessage.builder().strict(false).tags(tags.build()).build().deserialize(message);
+			} catch (RuntimeException ex) {
+				component = Component.text(message);
+			}
+		} else {
+			component = allowColor ? AMP_SERIALIZER.deserialize(message) : Component.text(message);
+		}
+
+		return stripInteractiveEvents(component);
+	}
+
+	Component renderFormatComponent(final String format, final Component messageComponent) {
+		if (format == null) {
+			return messageComponent;
+		}
+
+		final String placeholderToken = "{message}";
+		if (containsMiniMessage(format)) {
+			final String mmFormat = format.replace(placeholderToken, "<message>");
+			try {
+				return MINI_MESSAGE.deserialize(mmFormat, Placeholder.component("message", messageComponent));
+			} catch (RuntimeException ex) {
+				// fall through to legacy handling
+			}
+		}
+
+		final String[] parts = format.split(Pattern.quote(placeholderToken), -1);
+		Component combined = Component.empty();
+		for (int i = 0; i < parts.length; i++) {
+			combined = combined.append(deserializeChatComponent(parts[i]));
+			if (i < parts.length - 1) {
+				combined = combined.append(messageComponent);
+			}
+		}
+		return combined;
 	}
 
 	private String colorize(final String message) {
@@ -236,6 +283,11 @@ public final class LPC extends JavaPlugin implements Listener {
 
 	String escapeMiniMessageTags(final String message) {
 		return MINI_MESSAGE.escapeTags(message);
+	}
+
+	private Component stripInteractiveEvents(final Component component) {
+		return component.children(component.children().stream().map(this::stripInteractiveEvents).collect(Collectors.toList()))
+				.style(component.style().clickEvent(null).hoverEvent(null).insertion(null));
 	}
 
 	private boolean containsMiniMessage(final String message) {
