@@ -17,8 +17,6 @@ import org.jspecify.annotations.NonNull;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
-import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
-import net.kyori.adventure.text.minimessage.tag.standard.StandardTags;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 
 import java.util.ArrayList;
@@ -196,37 +194,17 @@ public final class LPC extends JavaPlugin implements Listener {
 	}
 
 	Component renderMessageComponent(final Player player, final String rawMessage) {
-		final boolean allowColor = player.hasPermission("lpc.colorcodes");
 		final boolean allowRgb = player.hasPermission("lpc.rgbcodes");
+		final boolean allowColor = allowRgb || player.hasPermission("lpc.colorcodes");
 
 		String message = rawMessage == null ? "" : rawMessage;
 		if (!allowColor) {
 			message = stripColorCodes(stripHexCodes(message));
-			message = escapeMiniMessageTags(message);
 		} else if (!allowRgb) {
 			message = stripHexCodes(message);
 		}
 
-		Component component;
-		if (containsMiniMessage(message)) {
-			final TagResolver.Builder tags = TagResolver.builder();
-			if (allowColor) {
-				tags.resolver(StandardTags.color());
-				tags.resolver(StandardTags.decorations());
-				if (allowRgb) {
-					tags.resolver(StandardTags.gradient());
-					tags.resolver(StandardTags.rainbow());
-				}
-			}
-
-			try {
-				component = MiniMessage.builder().strict(false).tags(tags.build()).build().deserialize(message);
-			} catch (RuntimeException ex) {
-				component = Component.text(message);
-			}
-		} else {
-			component = allowColor ? AMP_SERIALIZER.deserialize(message) : Component.text(message);
-		}
+		final Component component = allowColor ? AMP_SERIALIZER.deserialize(message) : Component.text(message);
 
 		return stripInteractiveEvents(component);
 	}
@@ -281,14 +259,11 @@ public final class LPC extends JavaPlugin implements Listener {
 	}
 
 
-	String escapeMiniMessageTags(final String message) {
-		return MINI_MESSAGE.escapeTags(message);
-	}
-
 	private Component stripInteractiveEvents(final Component component) {
 		return component.children(component.children().stream().map(this::stripInteractiveEvents).collect(Collectors.toList()))
 				.style(component.style().clickEvent(null).hoverEvent(null).insertion(null));
 	}
+
 
 	private boolean containsMiniMessage(final String message) {
 		return message.contains("<") && message.contains(">");
