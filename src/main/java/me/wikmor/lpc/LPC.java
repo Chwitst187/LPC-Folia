@@ -15,6 +15,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.jspecify.annotations.NonNull;
 
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
@@ -24,13 +25,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public final class LPC extends JavaPlugin implements Listener {
 	private static final LegacyComponentSerializer AMP_SERIALIZER = LegacyComponentSerializer.builder().character('&').hexColors().build();
 	private static final LegacyComponentSerializer SECTION_SERIALIZER = LegacyComponentSerializer.builder().character('§').hexColors().build();
 	private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
+	private static final Pattern URL_PATTERN = Pattern.compile("(?i)\\b((?:https?://|www\\.)[^\\s<]+)");
 
 	private LuckPerms luckPerms;
 
@@ -205,9 +207,7 @@ public final class LPC extends JavaPlugin implements Listener {
 		}
 		message = stripMiniMessageTags(message);
 
-		final Component component = allowColor ? AMP_SERIALIZER.deserialize(message) : Component.text(message);
-
-		return stripInteractiveEvents(component);
+		return linkifyMessage(message, allowColor);
 	}
 
 	Component renderFormatComponent(final String format, final Component messageComponent) {
@@ -260,9 +260,59 @@ public final class LPC extends JavaPlugin implements Listener {
 	}
 
 
-	private Component stripInteractiveEvents(final Component component) {
-		return component.children(component.children().stream().map(this::stripInteractiveEvents).collect(Collectors.toList()))
-				.style(component.style().clickEvent(null).hoverEvent(null).insertion(null));
+	private Component linkifyMessage(final String message, final boolean allowColor) {
+		if (message == null || message.isEmpty()) {
+			return Component.empty();
+		}
+
+		final Matcher matcher = URL_PATTERN.matcher(message);
+		int lastIndex = 0;
+		Component result = Component.empty();
+
+		while (matcher.find()) {
+			if (matcher.start() > lastIndex) {
+				result = result.append(deserializeMessagePart(message.substring(lastIndex, matcher.start()), allowColor));
+			}
+
+			String matched = matcher.group(1);
+			String trailing = "";
+			while (!matched.isEmpty()) {
+				final char lastChar = matched.charAt(matched.length() - 1);
+				if (".,!?;:".indexOf(lastChar) == -1) {
+					break;
+				}
+				trailing = lastChar + trailing;
+				matched = matched.substring(0, matched.length() - 1);
+			}
+
+			if (!matched.isEmpty()) {
+				final String url = matched.regionMatches(true, 0, "http://", 0, 7)
+						|| matched.regionMatches(true, 0, "https://", 0, 8)
+						? matched
+						: "https://" + matched;
+				final Component link = deserializeMessagePart(matched, allowColor).clickEvent(ClickEvent.openUrl(url));
+				result = result.append(link);
+			}
+
+			if (!trailing.isEmpty()) {
+				result = result.append(deserializeMessagePart(trailing, allowColor));
+			}
+
+			lastIndex = matcher.end();
+		}
+
+		if (lastIndex < message.length()) {
+			result = result.append(deserializeMessagePart(message.substring(lastIndex), allowColor));
+		}
+
+		return result;
+	}
+
+	private Component deserializeMessagePart(final String part, final boolean allowColor) {
+		if (part == null || part.isEmpty()) {
+			return Component.empty();
+		}
+		return allowColor ? AMP_SERIALIZER.deserialize(part) : Component.text(part);
 	}
 
 	private String stripMiniMessageTags(final String input) {
