@@ -71,7 +71,7 @@
 	
 	<!-- DO NOT EDIT unless instructed to do so or you know what you're doing. -->
 	<build>
-		<finalName>${project.name}-${project.version}</finalName>
+		<finalName>${project.name}-${project.version}-folia</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
