@@ -3,7 +3,7 @@ package me.wikmor.lpc;
 import me.clip.placeholderapi.PlaceholderAPI;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.cacheddata.CachedMetaData;
-import net.luckperms.api.model.user.User;
+import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -12,27 +12,17 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.jspecify.annotations.NonNull;
-
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.event.ClickEvent;
-import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public final class LPC extends JavaPlugin implements Listener {
-	private static final LegacyComponentSerializer AMP_SERIALIZER = LegacyComponentSerializer.builder().character('&').hexColors().build();
-	private static final LegacyComponentSerializer SECTION_SERIALIZER = LegacyComponentSerializer.builder().character('§').hexColors().build();
-	private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
-	private static final Pattern URL_PATTERN = Pattern.compile("(?i)\\b((?:https?://|www\\.)[^\\s<]+)");
+
+	private static final Pattern HEX_PATTERN = Pattern.compile("&#([A-Fa-f0-9]{6})");
+	private static final Pattern BUKKIT_HEX_PATTERN = Pattern.compile("&x(&[A-Fa-f0-9]){6}");
 
 	private LuckPerms luckPerms;
 
@@ -71,11 +61,10 @@ public final class LPC extends JavaPlugin implements Listener {
 	}
 
 	@Override
-	public boolean onCommand(final @NonNull CommandSender sender, final @NonNull Command command, final @NonNull String label, final String[] args) {
-		if (args.length == 1 && "reload".equals(args[0])) {
+	public boolean onCommand(final CommandSender sender, final Command command, final String label, final String[] args) {
+		if (args.length == 1 && "reload".equals(args[0]) && sender.hasPermission("lpc.reload")) {
 			reloadConfig();
-
-			sender.sendMessage(colorizeToSection("&aLPC has been reloaded."));
+			sender.sendMessage(colorize("&aLPC has been reloaded."));
 			return true;
 		}
 
@@ -86,9 +75,7 @@ public final class LPC extends JavaPlugin implements Listener {
 				}
 			}
 			final String clearMessage = getConfig().getString("clear-chat-message", "&7Chat has been cleared by a staff member.");
-			final String formatted = colorize(clearMessage);
-			getServer().getOnlinePlayers().forEach(p -> p.sendMessage(formatted));
-			getServer().getConsoleSender().sendMessage(formatted);
+			getServer().broadcastMessage(colorize(clearMessage));
 			return true;
 		}
 
@@ -109,8 +96,10 @@ public final class LPC extends JavaPlugin implements Listener {
 			sender.sendMessage(colorize("&7All Suffixes (by weight):"));
 			debugMeta.getSuffixes().forEach((weight, suffix) ->
 					sender.sendMessage(colorize("  &7[" + weight + "] &f" + suffix)));
-			sender.sendMessage(colorize("&7Username-color: &f" + (debugMeta.getMetaValue("username-color") != null ? debugMeta.getMetaValue("username-color") : "&cnone")));
-			sender.sendMessage(colorize("&7Message-color: &f" + (debugMeta.getMetaValue("message-color") != null ? debugMeta.getMetaValue("message-color") : "&cnone")));
+			final String usernameColor = debugMeta.getMetaValue("username-color");
+			final String messageColor = debugMeta.getMetaValue("message-color");
+			sender.sendMessage(colorize("&7Username-color: &f" + (usernameColor != null ? usernameColor : "&cnone")));
+			sender.sendMessage(colorize("&7Message-color: &f" + (messageColor != null ? messageColor : "&cnone")));
 			sender.sendMessage(colorize("&7Group format: &f" + (getConfig().getString("group-formats." + debugMeta.getPrimaryGroup()) != null ? "group-formats." + debugMeta.getPrimaryGroup() : "chat-format (default)")));
 			sender.sendMessage(colorize("&7PAPI: &f" + (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI") ? "&ahooked" : "&cnot found")));
 			sender.sendMessage(colorize("&7Has lpc.colorcodes: &f" + target.hasPermission("lpc.colorcodes")));
@@ -122,207 +111,107 @@ public final class LPC extends JavaPlugin implements Listener {
 	}
 
 	@Override
-	public List<String> onTabComplete(final @NonNull CommandSender sender, final @NonNull Command command, final @NonNull String alias, final String[] args) {
-		if (args.length == 1)
-			return Collections.singletonList("reload");
-
+	public List<String> onTabComplete(final CommandSender sender, final Command command, final String alias, final String[] args) {
+		if (args.length == 1) {
+			final String input = args[0].toLowerCase();
+			final List<String> completions = new ArrayList<>();
+			if (sender.hasPermission("lpc.reload") && "reload".startsWith(input)) completions.add("reload");
+			if (sender.hasPermission("lpc.clearchat") && "clear".startsWith(input)) completions.add("clear");
+			if (sender.hasPermission("lpc.debug") && "debug".startsWith(input)) completions.add("debug");
+			return completions;
+		}
+		if (args.length == 2 && "debug".equals(args[0]) && sender.hasPermission("lpc.debug")) {
+			return getServer().getOnlinePlayers().stream()
+					.map(Player::getName)
+					.filter(name -> name.toLowerCase().startsWith(args[1].toLowerCase()))
+					.collect(Collectors.toList());
+		}
 		return new ArrayList<>();
 	}
 
-	/**
-	 * AsyncPlayerChatEvent is deprecated in newer APIs in favor of the component-based AsyncChatEvent.
-	 * Migrating to AsyncChatEvent requires component-based formatting; keep this handler for
-	 * compatibility and suppress the deprecation warning to avoid IDE noise.
-	 */
-	@SuppressWarnings("deprecation")
-	@EventHandler(priority = EventPriority.HIGHEST)
+	@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
 	public void onChat(final AsyncPlayerChatEvent event) {
+		final String message = event.getMessage();
 		final Player player = event.getPlayer();
-		final String formatString = buildFormatString(player);
-		final Component messageComponent = renderMessageComponent(player, event.getMessage());
-		final Component rendered = renderFormatComponent(formatString, messageComponent);
-		final String legacyRendered = SECTION_SERIALIZER.serialize(rendered).replace("%", "%%");
-		event.setFormat(legacyRendered);
+
+		String format = buildFormat(player);
+		String processedMessage = processMessage(player, message);
+
+		event.setFormat(format.replace("{message}", processedMessage).replace("%", "%%"));
 	}
 
-	String buildFormatString(final Player player) {
+	String buildFormat(final Player player) {
+		final CachedMetaData metaData = this.luckPerms.getPlayerAdapter(Player.class).getMetaData(player);
+		final String group = metaData.getPrimaryGroup();
 
-		// Try to get a LuckPerms User via the UserManager (preferred over the deprecated PlayerAdapter).
-		CachedMetaData metaData;
-		String group;
-		String prefix = "";
-		String suffix = "";
-		String prefixesJoined = "";
-		String suffixesJoined = "";
-		String usernameColor = "";
-		String messageColor = "";
-
-		try {
-			final UUID uuid = player.getUniqueId();
-			final User user = this.luckPerms != null ? this.luckPerms.getUserManager().getUser(uuid) : null;
-
-			if (user != null) {
-				metaData = user.getCachedData().getMetaData();
-				group = metaData.getPrimaryGroup();
-				prefix = metaData.getPrefix() != null ? metaData.getPrefix() : "";
-				suffix = metaData.getSuffix() != null ? metaData.getSuffix() : "";
-				try { prefixesJoined = String.join("", metaData.getPrefixes().values()); } catch (Exception ignored) {}
-				try { suffixesJoined = String.join("", metaData.getSuffixes().values()); } catch (Exception ignored) {}
-				usernameColor = metaData.getMetaValue("username-color") != null ? Objects.requireNonNull(metaData.getMetaValue("username-color")) : "";
-				messageColor = metaData.getMetaValue("message-color") != null ? Objects.requireNonNull(metaData.getMetaValue("message-color")) : "";
-			} else {
-				group = "";
-			}
-		} catch (Exception ex) {
-			group = "";
+		String format = getConfig().getString(getConfig().getString("group-formats." + group) != null ? "group-formats." + group : "chat-format");
+		if (format == null) {
+			format = "{prefix}{name}&r: {message}";
 		}
 
-		// build displayname string from Component API (avoid deprecated getDisplayName)
-		final String displayNameString = AMP_SERIALIZER.serialize(player.displayName());
+		final String prefix = metaData.getPrefix();
+		final String suffix = metaData.getSuffix();
+		final String usernameColor = metaData.getMetaValue("username-color");
+		final String messageColor = metaData.getMetaValue("message-color");
 
-		String format = Objects.requireNonNull(getConfig().getString(getConfig().getString("group-formats." + group) != null ? "group-formats." + group : "chat-format"))
-				.replace("{prefix}", prefix)
-				.replace("{suffix}", suffix)
-				.replace("{prefixes}", prefixesJoined)
-				.replace("{suffixes}", suffixesJoined)
+		format = format
+				.replace("{prefix}", prefix != null ? prefix : "")
+				.replace("{suffix}", suffix != null ? suffix : "")
+				.replace("{prefixes}", metaData.getPrefixes().keySet().stream().map(key -> metaData.getPrefixes().get(key)).collect(Collectors.joining()))
+				.replace("{suffixes}", metaData.getSuffixes().keySet().stream().map(key -> metaData.getSuffixes().get(key)).collect(Collectors.joining()))
 				.replace("{world}", player.getWorld().getName())
 				.replace("{name}", player.getName())
-				.replace("{displayname}", displayNameString)
-				.replace("{username-color}", usernameColor)
-				.replace("{message-color}", messageColor);
+				.replace("{displayname}", player.getDisplayName())
+				.replace("{username-color}", usernameColor != null ? usernameColor : "")
+				.replace("{message-color}", messageColor != null ? messageColor : "");
 
-		format = getServer().getPluginManager().isPluginEnabled("PlaceholderAPI") ? PlaceholderAPI.setPlaceholders(player, format) : format;
+		format = translateHexColorCodes(format);
+		if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
+			format = PlaceholderAPI.setPlaceholders(player, format);
+		}
+		format = colorize(translateHexColorCodes(format));
+
 		return format;
 	}
 
-	Component renderMessageComponent(final Player player, final String rawMessage) {
-		final boolean allowRgb = player.hasPermission("lpc.rgbcodes");
-		final boolean allowColor = allowRgb || player.hasPermission("lpc.colorcodes");
-
-		String message = rawMessage == null ? "" : rawMessage;
-		if (!allowColor) {
-			message = stripColorCodes(stripHexCodes(message));
-		} else if (!allowRgb) {
-			message = stripHexCodes(message);
+	String processMessage(final Player player, final String message) {
+		if (player.hasPermission("lpc.colorcodes") && player.hasPermission("lpc.rgbcodes")) {
+			return colorize(translateHexColorCodes(message));
+		} else if (player.hasPermission("lpc.colorcodes")) {
+			return colorize(stripHexCodes(message));
+		} else if (player.hasPermission("lpc.rgbcodes")) {
+			return stripColorCodes(translateHexColorCodes(message));
+		} else {
+			return stripColorCodes(stripHexCodes(message));
 		}
-		message = stripMiniMessageTags(message);
-
-		return linkifyMessage(message, allowColor);
 	}
 
-	Component renderFormatComponent(final String format, final Component messageComponent) {
-		if (format == null) {
-			return messageComponent;
-		}
-
-		final String placeholderToken = "{message}";
-		if (containsMiniMessage(format)) {
-			final String mmFormat = format.replace(placeholderToken, "<message>");
-			try {
-				return MINI_MESSAGE.deserialize(mmFormat, Placeholder.component("message", messageComponent));
-			} catch (RuntimeException ex) {
-				// fall through to legacy handling
-			}
-		}
-
-		final String[] parts = format.split(Pattern.quote(placeholderToken), -1);
-		Component combined = Component.empty();
-		for (int i = 0; i < parts.length; i++) {
-			combined = combined.append(deserializeChatComponent(parts[i]));
-			if (i < parts.length - 1) {
-				combined = combined.append(messageComponent);
-			}
-		}
-		return combined;
+	String colorize(final String message) {
+		return ChatColor.translateAlternateColorCodes('&', message);
 	}
 
-	private String colorize(final String message) {
-		return colorizeToSection(message);
-	}
+	String translateHexColorCodes(final String message) {
+		final char colorChar = ChatColor.COLOR_CHAR;
 
-	private String colorizeToSection(final String message) {
-		if (message == null) return "";
-		return SECTION_SERIALIZER.serialize(deserializeChatComponent(message));
-	}
-
-	Component deserializeChatComponent(final String message) {
-		if (message == null || message.isEmpty()) {
-			return Component.empty();
-		}
-		if (containsMiniMessage(message)) {
-			try {
-				return MINI_MESSAGE.deserialize(message);
-			} catch (RuntimeException ignored) {
-				return AMP_SERIALIZER.deserialize(message);
-			}
-		}
-		return AMP_SERIALIZER.deserialize(message);
-	}
-
-
-	private Component linkifyMessage(final String message, final boolean allowColor) {
-		if (message == null || message.isEmpty()) {
-			return Component.empty();
-		}
-
-		final Matcher matcher = URL_PATTERN.matcher(message);
-		int lastIndex = 0;
-		Component result = Component.empty();
-
+		// Handle &#rrggbb format
+		Matcher matcher = HEX_PATTERN.matcher(message);
+		StringBuffer buffer = new StringBuffer(message.length() + 4 * 8);
 		while (matcher.find()) {
-			if (matcher.start() > lastIndex) {
-				result = result.append(deserializeMessagePart(message.substring(lastIndex, matcher.start()), allowColor));
-			}
-
-			String matched = matcher.group(1);
-			String trailing = "";
-			while (!matched.isEmpty()) {
-				final char lastChar = matched.charAt(matched.length() - 1);
-				if (".,!?;:".indexOf(lastChar) == -1) {
-					break;
-				}
-				trailing = lastChar + trailing;
-				matched = matched.substring(0, matched.length() - 1);
-			}
-
-			if (!matched.isEmpty()) {
-				final String url = matched.regionMatches(true, 0, "http://", 0, 7)
-						|| matched.regionMatches(true, 0, "https://", 0, 8)
-						? matched
-						: "https://" + matched;
-				final Component link = deserializeMessagePart(matched, allowColor).clickEvent(ClickEvent.openUrl(url));
-				result = result.append(link);
-			}
-
-			if (!trailing.isEmpty()) {
-				result = result.append(deserializeMessagePart(trailing, allowColor));
-			}
-
-			lastIndex = matcher.end();
+			final String group = matcher.group(1);
+			matcher.appendReplacement(buffer, colorChar + "x"
+					+ colorChar + group.charAt(0) + colorChar + group.charAt(1)
+					+ colorChar + group.charAt(2) + colorChar + group.charAt(3)
+					+ colorChar + group.charAt(4) + colorChar + group.charAt(5));
 		}
+		String result = matcher.appendTail(buffer).toString();
 
-		if (lastIndex < message.length()) {
-			result = result.append(deserializeMessagePart(message.substring(lastIndex), allowColor));
+		// Handle &x&r&r&g&g&b&b format (Bukkit-style)
+		matcher = BUKKIT_HEX_PATTERN.matcher(result);
+		buffer = new StringBuffer(result.length());
+		while (matcher.find()) {
+			matcher.appendReplacement(buffer, matcher.group().replace('&', colorChar));
 		}
-
-		return result;
-	}
-
-	private Component deserializeMessagePart(final String part, final boolean allowColor) {
-		if (part == null || part.isEmpty()) {
-			return Component.empty();
-		}
-		return allowColor ? AMP_SERIALIZER.deserialize(part) : Component.text(part);
-	}
-
-	private String stripMiniMessageTags(final String input) {
-		if (input == null || input.isEmpty()) return "";
-		return input.replaceAll("<[^>]+>", "");
-	}
-
-
-	private boolean containsMiniMessage(final String message) {
-		return message.contains("<") && message.contains(">");
+		return matcher.appendTail(buffer).toString();
 	}
 
 	String stripColorCodes(final String message) {
