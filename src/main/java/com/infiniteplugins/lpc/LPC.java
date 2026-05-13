@@ -1,4 +1,4 @@
-package me.wikmor.lpc;
+package com.infiniteplugins.lpc;
 
 import me.clip.placeholderapi.PlaceholderAPI;
 import net.luckperms.api.LuckPerms;
@@ -39,16 +39,10 @@ public final class LPC extends JavaPlugin implements Listener {
 
 		saveDefaultConfig();
 
-		boolean paperChat = false;
 		try {
 			Class.forName("io.papermc.paper.event.player.AsyncChatEvent");
-			paperChat = true;
-		} catch (ClassNotFoundException ignored) {
-		}
-
-		if (paperChat) {
 			getServer().getPluginManager().registerEvents(new PaperChatListener(this), this);
-		} else {
+		} catch (ClassNotFoundException ignored) {
 			getServer().getPluginManager().registerEvents(this, this);
 		}
 
