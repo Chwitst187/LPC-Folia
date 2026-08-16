@@ -4,6 +4,7 @@ version: ${project.version}
 main: ${main.class}
 author: ${author}
 api-version: 1.13
+folia-supported: true
 depend: [LuckPerms]
 softdepend: [PlaceholderAPI]
 commands:
@@ -25,4 +26,7 @@ permissions:
     default: false
   lpc.rgbcodes:
     description: Allows RGB/hex color codes in chat messages
+    default: false
+  lpc.minimessage:
+    description: Allows MiniMessage tags in chat messages
     default: false

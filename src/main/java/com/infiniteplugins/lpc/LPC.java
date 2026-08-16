@@ -3,6 +3,7 @@ package com.infiniteplugins.lpc;
 import me.clip.placeholderapi.PlaceholderAPI;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.cacheddata.CachedMetaData;
+import net.kyori.adventure.text.Component;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -25,6 +26,8 @@ public final class LPC extends JavaPlugin implements Listener {
 	private static final Pattern BUKKIT_HEX_PATTERN = Pattern.compile("&x(&[A-Fa-f0-9]){6}");
 
 	private LuckPerms luckPerms;
+	private final TextFormatter textFormatter = new TextFormatter();
+	private boolean folia;
 
 
 	@Override
@@ -38,6 +41,7 @@ public final class LPC extends JavaPlugin implements Listener {
 		}
 
 		saveDefaultConfig();
+		this.folia = classExists("io.papermc.paper.threadedregions.RegionizedServer");
 
 		try {
 			Class.forName("io.papermc.paper.event.player.AsyncChatEvent");
@@ -63,12 +67,16 @@ public final class LPC extends JavaPlugin implements Listener {
 		}
 
 		if (args.length == 1 && "clear".equals(args[0]) && sender.hasPermission("lpc.clearchat")) {
+			final String clearMessage = getConfig().getString("clear-chat-message", "&7Chat has been cleared by a staff member.");
+			if (folia) {
+				FoliaSupport.clearChat(this, clearMessage);
+				return true;
+			}
 			for (final Player player : getServer().getOnlinePlayers()) {
 				for (int i = 0; i < 100; i++) {
 					player.sendMessage("");
 				}
 			}
-			final String clearMessage = getConfig().getString("clear-chat-message", "&7Chat has been cleared by a staff member.");
 			getServer().broadcastMessage(colorize(clearMessage));
 			return true;
 		}
@@ -135,6 +143,10 @@ public final class LPC extends JavaPlugin implements Listener {
 	}
 
 	String buildFormat(final Player player) {
+		return textFormatter.serializeLegacy(textFormatter.deserialize(buildRawFormat(player)));
+	}
+
+	String buildRawFormat(final Player player) {
 		final CachedMetaData metaData = this.luckPerms.getPlayerAdapter(Player.class).getMetaData(player);
 		final String group = metaData.getPrimaryGroup();
 
@@ -159,13 +171,28 @@ public final class LPC extends JavaPlugin implements Listener {
 				.replace("{username-color}", usernameColor != null ? usernameColor : "")
 				.replace("{message-color}", messageColor != null ? messageColor : "");
 
-		format = translateHexColorCodes(format);
 		if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
 			format = PlaceholderAPI.setPlaceholders(player, format);
 		}
-		format = colorize(translateHexColorCodes(format));
-
 		return format;
+	}
+
+	Component formatPaperMessage(final Player player, final Component originalMessage) {
+		final String plainMessage = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+				.serialize(originalMessage);
+		final Component message = textFormatter.deserializeUserMessage(plainMessage,
+				player.hasPermission("lpc.colorcodes"), player.hasPermission("lpc.rgbcodes"),
+				player.hasPermission("lpc.minimessage"));
+		final String[] parts = buildRawFormat(player).split("\\{message}", -1);
+		Component result = textFormatter.deserialize(parts[0]);
+		for (int i = 1; i < parts.length; i++) {
+			result = result.append(message).append(textFormatter.deserialize(parts[i]));
+		}
+		return result;
+	}
+
+	Component formatComponent(final String text) {
+		return textFormatter.deserialize(text);
 	}
 
 	String processMessage(final Player player, final String message) {
@@ -216,5 +243,14 @@ public final class LPC extends JavaPlugin implements Listener {
 		String result = message.replaceAll("&#[0-9a-fA-F]{6}", "");
 		result = result.replaceAll("&x(&[0-9a-fA-F]){6}", "");
 		return result;
+	}
+
+	private boolean classExists(final String name) {
+		try {
+			Class.forName(name);
+			return true;
+		} catch (ClassNotFoundException ignored) {
+			return false;
+		}
 	}
 }

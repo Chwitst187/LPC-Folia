@@ -13,8 +13,10 @@
 # {username-color} - the player's or the group's username color
 # {message-color} - the player's or the group's message color
 #
-# Color codes: Use & for colors (&a, &b, etc.) and &#rrggbb for hex colors.
-# Permissions: lpc.reload, lpc.clearchat, lpc.debug, lpc.colorcodes, lpc.rgbcodes
+# Formatting supports Legacy (&a, &#rrggbb and &x&r&r&g&g&b&b) and MiniMessage
+# (<green>, <#rrggbb>, <gradient:red:blue>, decorations, hover/click, etc.).
+# Player messages need lpc.colorcodes/lpc.rgbcodes for Legacy input and
+# lpc.minimessage for MiniMessage tags. Formats and LuckPerms meta always support both.
 #
 # Commands:
 #   /lpc reload - Reload configuration
@@ -29,6 +31,7 @@ chat-format: "{prefix}{name}&r: {message}"
 # chat-format: "[{world}] {prefix}{name}&r: {message}"
 # chat-format: "{prefix}{name}{suffix}&r: {message}"
 # chat-format: "{prefix}{username-color}{name}&r: {message-color}{message}"
+# chat-format: "<gray>[{world}]</gray> {prefix}<gradient:#55ffff:#5555ff>{name}</gradient><reset>: {message}"
 
 # Per-group chat format. Overrides chat-format for the specified group.
 # YAML note: group names must be indented with exactly 2 spaces.
