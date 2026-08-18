@@ -141,7 +141,7 @@ public final class LPC extends JavaPlugin implements Listener {
 
 		String finalFormat = format.replace("{message}", processedMessage).replace("%", "%%");
 		if (player.hasPermission("lpc.emptylines")) {
-			finalFormat = "\n" + finalFormat + "\n";
+			finalFormat = "\n\n" + finalFormat + "\n\n";
 		}
 		event.setFormat(finalFormat);
 	}
@@ -193,7 +193,7 @@ public final class LPC extends JavaPlugin implements Listener {
 			result = result.append(message).append(textFormatter.deserialize(parts[i]));
 		}
 		if (player.hasPermission("lpc.emptylines")) {
-			result = Component.newline().append(result).append(Component.newline());
+			result = Component.newline().append(Component.newline()).append(result).append(Component.newline()).append(Component.newline());
 		}
 		return result;
 	}
