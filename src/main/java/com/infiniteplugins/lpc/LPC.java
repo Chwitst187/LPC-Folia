@@ -180,9 +180,14 @@ public final class LPC extends JavaPlugin implements Listener {
 	Component formatPaperMessage(final Player player, final Component originalMessage) {
 		final String plainMessage = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
 				.serialize(originalMessage);
-		final Component message = textFormatter.deserializeUserMessage(plainMessage,
+		Component message = textFormatter.deserializeUserMessage(plainMessage,
 				player.hasPermission("lpc.colorcodes"), player.hasPermission("lpc.rgbcodes"),
 				player.hasPermission("lpc.minimessage"));
+		if (player.hasPermission("lpc.emptylines")) {
+			message = textFormatter.deserialize("<dark_gray>\u00bb</dark_gray> ")
+					.append(message)
+					.append(textFormatter.deserialize(" <dark_gray>\u00bb</dark_gray>"));
+		}
 		final String[] parts = buildRawFormat(player).split("\\{message}", -1);
 		Component result = textFormatter.deserialize(parts[0]);
 		for (int i = 1; i < parts.length; i++) {
@@ -196,15 +201,20 @@ public final class LPC extends JavaPlugin implements Listener {
 	}
 
 	String processMessage(final Player player, final String message) {
+		String processed;
 		if (player.hasPermission("lpc.colorcodes") && player.hasPermission("lpc.rgbcodes")) {
-			return colorize(translateHexColorCodes(message));
+			processed = colorize(translateHexColorCodes(message));
 		} else if (player.hasPermission("lpc.colorcodes")) {
-			return colorize(stripHexCodes(message));
+			processed = colorize(stripHexCodes(message));
 		} else if (player.hasPermission("lpc.rgbcodes")) {
-			return stripColorCodes(translateHexColorCodes(message));
+			processed = stripColorCodes(translateHexColorCodes(message));
 		} else {
-			return stripColorCodes(stripHexCodes(message));
+			processed = stripColorCodes(stripHexCodes(message));
 		}
+		if (player.hasPermission("lpc.emptylines")) {
+			processed = colorize("&8\u00bb ") + processed + colorize(" &8\u00bb");
+		}
+		return processed;
 	}
 
 	String colorize(final String message) {

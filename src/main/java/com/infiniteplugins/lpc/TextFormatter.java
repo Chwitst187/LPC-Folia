@@ -11,6 +11,7 @@ final class TextFormatter {
 
 	private static final Pattern LEGACY_HEX = Pattern.compile("(?i)&#([0-9a-f]{6})|&x(?:&([0-9a-f]))(?:&([0-9a-f]))(?:&([0-9a-f]))(?:&([0-9a-f]))(?:&([0-9a-f]))(?:&([0-9a-f]))");
 	private static final Pattern LEGACY_CODE = Pattern.compile("(?i)&([0-9a-fk-or])");
+	private static final Pattern RESOURCE_PACK_TAG = Pattern.compile("(?i)</?(?:glyph|shift|font|effect)(?::(?:'[^']*'|\"[^\"]*\"|[^>])*)?>");
 	private static final String[] NAMES = {
 		"black", "dark_blue", "dark_green", "dark_aqua", "dark_red", "dark_purple", "gold", "gray",
 		"dark_gray", "blue", "green", "aqua", "red", "light_purple", "yellow", "white"
@@ -24,7 +25,7 @@ final class TextFormatter {
 	}
 
 	Component deserializeUserMessage(final String input, final boolean legacy, final boolean rgb, final boolean miniMessage) {
-		String value = input == null ? "" : input;
+		String value = stripResourcePackContent(input == null ? "" : input);
 		if (!miniMessage) {
 			value = MINI_MESSAGE.escapeTags(value);
 		}
@@ -39,6 +40,22 @@ final class TextFormatter {
 			value = LEGACY_CODE.matcher(value).replaceAll("");
 		}
 		return MINI_MESSAGE.deserialize(value);
+	}
+
+	private String stripResourcePackContent(final String input) {
+		return stripPrivateUseCharacters(RESOURCE_PACK_TAG.matcher(input).replaceAll(""));
+	}
+
+	private String stripPrivateUseCharacters(final String input) {
+		final StringBuilder result = new StringBuilder(input.length());
+		for (int offset = 0; offset < input.length();) {
+			final int codePoint = input.codePointAt(offset);
+			offset += Character.charCount(codePoint);
+			if (Character.getType(codePoint) != Character.PRIVATE_USE) {
+				result.appendCodePoint(codePoint);
+			}
+		}
+		return result.toString();
 	}
 
 	String serializeLegacy(final Component component) {

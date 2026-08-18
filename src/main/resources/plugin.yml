@@ -30,3 +30,6 @@ permissions:
   lpc.minimessage:
     description: Allows MiniMessage tags in chat messages
     default: false
+  lpc.emptylines:
+    description: Shows >> markers
+    default: false
