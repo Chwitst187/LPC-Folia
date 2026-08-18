@@ -141,7 +141,7 @@ public final class LPC extends JavaPlugin implements Listener {
 
 		String finalFormat = format.replace("{message}", processedMessage).replace("%", "%%");
 		if (player.hasPermission("lpc.emptylines")) {
-			finalFormat = colorize("\n&8\u00bb\n") + finalFormat + colorize("\n&8\u00bb\n");
+			finalFormat = colorize("\n\n&8\u00bb\n") + finalFormat + colorize("\n&8\u00bb\n\n");
 		}
 		event.setFormat(finalFormat);
 	}
@@ -194,7 +194,7 @@ public final class LPC extends JavaPlugin implements Listener {
 		}
 		if (player.hasPermission("lpc.emptylines")) {
 			final Component marker = textFormatter.deserialize("<dark_gray>\u00bb</dark_gray>");
-			result = Component.newline().append(marker).append(Component.newline()).append(result).append(Component.newline()).append(marker).append(Component.newline());
+			result = Component.newline().append(Component.newline()).append(marker).append(Component.newline()).append(result).append(Component.newline()).append(marker).append(Component.newline()).append(Component.newline());
 		}
 		return result;
 	}
