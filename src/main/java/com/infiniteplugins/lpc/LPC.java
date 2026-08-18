@@ -139,7 +139,11 @@ public final class LPC extends JavaPlugin implements Listener {
 		String format = buildFormat(player);
 		String processedMessage = processMessage(player, message);
 
-		event.setFormat(format.replace("{message}", processedMessage).replace("%", "%%"));
+		String finalFormat = format.replace("{message}", processedMessage).replace("%", "%%");
+		if (player.hasPermission("lpc.emptylines")) {
+			finalFormat = colorize("\n&8\u00bb\n") + finalFormat + colorize("\n&8\u00bb\n");
+		}
+		event.setFormat(finalFormat);
 	}
 
 	String buildFormat(final Player player) {
@@ -183,15 +187,14 @@ public final class LPC extends JavaPlugin implements Listener {
 		Component message = textFormatter.deserializeUserMessage(plainMessage,
 				player.hasPermission("lpc.colorcodes"), player.hasPermission("lpc.rgbcodes"),
 				player.hasPermission("lpc.minimessage"));
-		if (player.hasPermission("lpc.emptylines")) {
-			message = textFormatter.deserialize("<dark_gray>\u00bb</dark_gray> ")
-					.append(message)
-					.append(textFormatter.deserialize(" <dark_gray>\u00bb</dark_gray>"));
-		}
-		final String[] parts = buildRawFormat(player).split("\\{message}", -1);
+		final String[] parts = buildRawFormat(player).split("\\\\{message}", -1);
 		Component result = textFormatter.deserialize(parts[0]);
 		for (int i = 1; i < parts.length; i++) {
 			result = result.append(message).append(textFormatter.deserialize(parts[i]));
+		}
+		if (player.hasPermission("lpc.emptylines")) {
+			final Component marker = textFormatter.deserialize("<dark_gray>\u00bb</dark_gray>");
+			result = Component.newline().append(marker).append(Component.newline()).append(result).append(Component.newline()).append(marker).append(Component.newline());
 		}
 		return result;
 	}
@@ -210,9 +213,6 @@ public final class LPC extends JavaPlugin implements Listener {
 			processed = stripColorCodes(translateHexColorCodes(message));
 		} else {
 			processed = stripColorCodes(stripHexCodes(message));
-		}
-		if (player.hasPermission("lpc.emptylines")) {
-			processed = colorize("&8\u00bb ") + processed + colorize(" &8\u00bb");
 		}
 		return processed;
 	}
