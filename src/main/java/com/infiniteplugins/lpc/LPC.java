@@ -187,7 +187,7 @@ public final class LPC extends JavaPlugin implements Listener {
 		Component message = textFormatter.deserializeUserMessage(plainMessage,
 				player.hasPermission("lpc.colorcodes"), player.hasPermission("lpc.rgbcodes"),
 				player.hasPermission("lpc.minimessage"));
-		final String[] parts = buildRawFormat(player).split("\\\\{message}", -1);
+		final String[] parts = buildRawFormat(player).split("(?i)\\\\{message\\\\}", -1);
 		Component result = textFormatter.deserialize(parts[0]);
 		for (int i = 1; i < parts.length; i++) {
 			result = result.append(message).append(textFormatter.deserialize(parts[i]));
